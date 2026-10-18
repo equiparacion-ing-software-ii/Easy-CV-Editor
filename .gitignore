@@ -5,7 +5,9 @@ dist/
 cypress/videos/
 cypress/screenshots/
 cypress/downloads/
-
+# Artefactos de contexto realizado por agentes
+*.md
+*.MD
 # Test and debugging artifacts
 *_dump.html
 temp_*
@@ -14,3 +16,6 @@ public/__*
 test_headless.pdf
 .agents/
 .atl/
+# Archivos que deben permanecer sin importar las reglas anteriores
+!README.md
+!CONTRIBUTING.md

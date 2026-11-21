@@ -1,0 +1,13 @@
+#No empaquetar las depenciencias locales
+node_modules/
+#No incluir los logs
+**.log*
+
+.gitignore
+.git/
+.env
+.env.test
+!.env.example
+
+
+.vscode

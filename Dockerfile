@@ -4,7 +4,7 @@
     FROM node:22-alpine AS base
     
     WORKDIR /app
-    #En vez de correr todo como root, creo un usuario nuevo 'node'
+    #En vez de correr todo como root, uso el usuario 'node'
     RUN chown -R node:node /app
   
 #Segunda etapa:
@@ -33,3 +33,10 @@
     EXPOSE 5173
     #levantar el servidor de desarrollo
     CMD ["npm", "run", "dev"]
+    
+    ###Etapa independiente de testing con Cypress
+    FROM cypress/included:16.1.1 AS cypress
+    WORKDIR /app
+    ENV CYPRESS_INSTALL_BINARY=0
+    COPY package*.json ./
+    RUN npm ci

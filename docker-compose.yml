@@ -1,0 +1,10 @@
+services:
+   app:
+      build:
+         context: .
+         target: dev
+      ports:
+         - "5173:5173"
+      volumes:
+         - .:/app # Monta el códigio para habilitar hot-reload cuando hagan cambios directamente en disco mientras se desarrolla
+         - /app/node_modules

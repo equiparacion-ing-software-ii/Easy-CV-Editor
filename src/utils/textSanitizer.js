@@ -48,7 +48,7 @@ export const sanitizeOcrMathSyntax = (text) => {
   if (!text || typeof text !== 'string') return text || '';
   return text
     // Replace math-wrapped expressions like $N+1$, $CI/CD$, $Cl/CD$, $(1+D)$, $I+D$
-    .replace(/\$([^\$]+)\$/g, '$1')
+    .replace(/\$([^$]+)\$/g, '$1')
     // Fix lowercase 'l' in CI/CD
     .replace(/\bC[l|1]\/CD\b/g, 'CI/CD')
     // Fix (1+D) or 1+D in context of R&D / Investigación y Desarrollo

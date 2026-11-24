@@ -76,7 +76,7 @@ describe('Floating Section AI Tips Column & Curated Recruiter Rules', () => {
       expect(style).toContain('border-left: 4px solid');
 
       // Zero raw unicode emojis
-      expect(callout.textContent).not.toMatch(/[🛑🚨⚠️ℹ️💡✨]/);
+      expect(callout.textContent).not.toMatch(/(?:🛑|🚨|⚠️|ℹ️|💡|✨)/u);
 
       // Must have Lucide SVG icon
       const svg = icon.querySelector('svg');

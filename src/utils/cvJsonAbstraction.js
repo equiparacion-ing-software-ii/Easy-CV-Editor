@@ -244,7 +244,7 @@ export const analyzeCVWithATSKnowledge = (cvData, layout, isAtsMode, options = {
         const mathMatches = String(t).match(/\$([a-zA-Z0-9_\-+/]+)\$/g);
         if (mathMatches) pseudoMathCount += mathMatches.length;
 
-        const ocrMatches = String(t).match(/[☑☐✓✔🗹]/g);
+        const ocrMatches = String(t).match(/[☑☐✓✔🗹]/gu);
         if (ocrMatches) disruptiveOcrSymbolsCount += ocrMatches.length;
       });
 

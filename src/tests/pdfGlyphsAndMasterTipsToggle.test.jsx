@@ -194,7 +194,7 @@ describe('3. Master AI Tips Toggle & Right-Rail AITipsSidebar', () => {
     expect(icon).toBeInTheDocument();
 
     // Verify zero raw emojis in DOM (must use Lucide SVGs)
-    expect(firstCallout.textContent).not.toMatch(/[🛑🚨⚠️ℹ️💡]/);
+    expect(firstCallout.textContent).not.toMatch(/(?:🛑|🚨|⚠️|ℹ️|💡)/u);
     expect(icon.querySelector('svg')).toBeInTheDocument();
   });
 

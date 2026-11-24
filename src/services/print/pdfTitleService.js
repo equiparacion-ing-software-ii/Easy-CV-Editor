@@ -15,6 +15,7 @@ import { stripHtml } from '../../utils/richTextEngine';
 export const sanitizeFileName = (name) => {
   if (!name || typeof name !== 'string') return '';
   return name
+    // eslint-disable-next-line no-control-regex
     .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '_')
     .replace(/\s+/g, ' ')
     .trim()

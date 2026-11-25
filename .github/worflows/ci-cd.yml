@@ -1,0 +1,224 @@
+name: CI/CD
+    on:
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
+
+    permissions:
+      contents: read
+
+    # Cancel stale runs on PRs; never interrupt an active production deploy on main
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+    env:
+      NODE_VERSION: "22"
+      CYPRESS_INSTALL_BINARY: "0"
+
+    jobs:
+      lint:
+        name: Lint (ESLint)
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v7
+          - uses: actions/setup-node@v7
+            with:
+              node-version: ${{ env.NODE_VERSION }}
+              cache: "npm"
+          - run: npm ci
+          - run: npm run lint
+
+      test:
+        name: Unit & Integration Tests (Vitest)
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v7
+          - uses: actions/setup-node@v7
+            with:
+              node-version: ${{ env.NODE_VERSION }}
+              cache: "npm"
+          - run: npm ci
+          - run: npm test
+
+      build:
+        name: Build Production Bundle
+        needs: [lint, test]
+        runs-on: ubuntu-latest
+        environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+        steps:
+          - uses: actions/checkout@v7
+          - uses: actions/setup-node@v7
+            with:
+              node-version: ${{ env.NODE_VERSION }}
+              cache: "npm"
+          - run: npm ci
+          - run: npm run build
+            env:
+              VITE_ENABLE_TWO_COLUMN_MODE: ${{ vars.VITE_ENABLE_TWO_COLUMN_MODE }}
+              VITE_ENABLE_BITACORA: ${{ vars.VITE_ENABLE_BITACORA }}
+              VITE_ENABLE_BITACORA_TOUR: ${{ vars.VITE_ENABLE_BITACORA_TOUR }}
+              VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+              VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          - uses: actions/upload-artifact@v7
+            with:
+              name: dist-bundle
+              path: dist/
+              retention-days: 3
+
+      deploy_preview:
+        name: Deploy Preview (PR)
+        needs: [build]
+        # Guard against fork PRs where GitHub strips secrets for security
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        environment:
+          name: preview
+          url: ${{ steps.netlify.outputs.deploy_url }}
+        steps:
+          - uses: actions/checkout@v7
+          - uses: actions/setup-node@v7
+            with:
+              node-version: ${{ env.NODE_VERSION }}
+          - uses: actions/download-artifact@v8
+            with:
+              name: dist-bundle
+              path: dist/
+          - name: Deploy preview to Netlify
+            id: netlify
+            env:
+              NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+              NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+            run: |
+              DEPLOY_JSON=$(npx --yes netlify-cli@27 deploy --dir=dist --alias="pr-${{ github.event.pull_request.number }}" --json)
+              echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.deploy_url')" >> "$GITHUB_OUTPUT"
+
+      deploy_production:
+        name: Deploy Production (main)
+        needs: [build]
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        environment:
+          name: production
+          url: ${{ steps.netlify.outputs.deploy_url }}
+        steps:
+          - uses: actions/checkout@v7
+          - uses: actions/setup-node@v7
+            with:
+              node-version: ${{ env.NODE_VERSION }}
+          - uses: actions/download-artifact@v8
+            with:
+              name: dist-bundle
+              path: dist/
+          - name: Deploy production to Netlify
+            id: netlify
+            env:
+              NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+              NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+            run: |
+              DEPLOY_JSON=$(npx --yes netlify-cli@27 deploy --dir=dist --prod --message="Deploy ${{ github.sha }}" --json)
+              echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.url // .deploy_url')" >> "$GITHUB_OUTPUT"
+
+
+               Excelente. Vamos a desarmar la Opción 1 átomo por átomo para que entiendas cada engranaje, qué alternativas existen en la industria y por qué se toma cada decisión.
+
+  Un pipeline de GitHub Actions es un grafo dirigido de decisiones sobre 6 piezas atómicas:
+  ──────
+  Átomo 1 — Disparadores (on:) y control de colisiones (concurrency:)
+
+  Qué decide: ¿Cuándo arranca el pipeline y qué pasa si pusheás 3 veces seguidas?
+
+  • Alternativa A (Estándar para equipos con PRs):
+      • pull_request: branches: [main] (valida cada PR antes de mergear).
+      • push: branches: [main] (dispara el deploy real cuando entra a main).
+      • Ventaja: si trabajás en una rama feature con 15 commits locales mientras desarrollás, no quemás minutos de CI hasta que abrís el PR.
+  • Alternativa B (Feedback en cada push a cualquier rama):
+      • push: branches: ['**'] + pull_request.
+      • Ventaja: te enterás en el minuto 1 si rompiste algo sin esperar al PR. Contra: si empujás mucho WIP, duplicás ejecuciones cuando abrís PR.
+  • Control de carrera (concurrency: — detalle Senior):
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+      • Por qué esa condición: en un PR, si subís un commit nuevo, querés cancelar la corrida vieja al instante (true). Pero en main nunca cancelás un deploy a mitad de camino (false), porque podrías cortar una
+      subida a producción a medias.
+
+  ──────
+  Átomo 2 — Dónde corre el CI (ubuntu-latest nativo vs Docker en CI)
+
+  Qué decide: ¿El runner instala Node directo o levanta tu Dockerfile?
+
+   Enfoque                                                       │ Cómo funciona                                        │ Cuándo elegirlo
+  ───────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────
+   A. Runner nativo (ubuntu-latest + actions/setup-node Node 22) │ Usa la VM Ubuntu de GitHub, cachea ~/.npm, corre     │ Ideal para SPAs como esta que despliegan estáticos a Netlify: arranca en segundos, caché
+                                                                 │ CYPRESS_INSTALL_BINARY=0 npm ci.                     │ nativa simple, cero overhead de capas Docker.
+   B. Docker-in-CI (docker build + docker compose)               │ Construye tu imagen Alpine/Debian en el runner y     │ Obligatorio si tu artefacto de producción es una imagen Docker (backend con deps de SO,
+                                                                 │ ejecuta los tests adentro.                           │ librerías C++, Nginx) o si tus tests dependen de binarios del SO que solo existen en esa
+                                                                 │                                                      │ imagen.
+
+  • Nota puntual de tu package.json:35: aunque uses runner nativo, siempre pasá CYPRESS_INSTALL_BINARY=0 antes de npm ci en los jobs de Lint/Vitest/Build para no descargar el binario pesado de Cypress en vano.
+  ──────
+  Átomo 3 — Topología del grafo (1 job vs multi-job con artifacts)
+
+  Qué decide: ¿Todo en una sola máquina virtual o jobs especializados conectados con needs:?
+
+  1. Enfoque Monolítico (1 Job secuencial):
+  checkout → setup-node → npm ci → lint → test → build → deploy (con if: github.ref == 'refs/heads/main').
+      • Pro: un solo npm ci (más rápido en proyectos chicos, YAML corto).
+      • Contra: si un día corrés E2E o checks paralelos, todo hace fila; además el paso de tests comparte memoria/entorno con los tokens secretos de deploy.
+  2. Enfoque Desacoplado Multi-Job (Estándar de producción):
+    [lint] ───┐
+              ├──► [build (genera dist/ + upload-artifact)] ──► [deploy (main / preview)]
+    [test] ───┘
+
+      • Pro #1 (Paralelismo / Fail-fast): lint (5s) y vitest (~1m) arrancan al mismo tiempo.
+      • Pro #2 (Artefacto inmutable): build sube dist/ con actions/upload-artifact y deploy solo lo baja (actions/download-artifact) y lo publica.
+      • Pro #3 (Aislamiento de seguridad): el Job deploy puede atarse a un GitHub Environment (production) donde viven NETLIFY_AUTH_TOKEN y aprobaciones manuales si un día las querés; los jobs que ejecutan
+      tests/código de PRs ni siquiera tienen acceso a ese secreto.
+      • Contra: cada job hace su npm ci (aunque con cache: 'npm' tarda ~5–10s).
+
+  ──────
+  Átomo 4 — Variables en Build Time (VITE_*) vs Secrets de Deploy
+
+  Concepto crítico en Vite: como viste en src/services/supabaseClient.js:8-9 y .env.example, Vite reemplaza import.meta.env.VITE_* durante npm run build, incrustándolos en el JS de dist/.
+
+  • vars (${{ vars.VITE_... }}): para feature flags (VITE_ENABLE_TWO_COLUMN_MODE, VITE_ENABLE_BITACORA) y URLs públicas. No son secretos (todo lo VITE_* viaja al navegador del usuario).
+  • secrets (${{ secrets.NETLIFY_AUTH_TOKEN }}): credenciales que jamás salen del runner. GitHub las oculta en logs.
+  • Posibilidad avanzada (Environments): podés definir Environment preview y Environment production en GitHub con distintos valores de VITE_* (ej. un Supabase de staging en PRs y el real en main).
+  ──────
+  Átomo 5 — El mecanismo de subida a Netlify (netlify-cli vs Action de terceros)
+
+  Como dist/ ya viene compilado del job build, tenés 2 formas reales de subirlo:
+
+  1. netlify-cli oficial (npx netlify-cli deploy --dir=dist ...):
+      • Al pasar --dir=dist, el CLI solo sube esa carpeta e ignora el command = "npm run build" de netlify.toml (no recompila).
+      • En main: netlify deploy --dir=dist --prod --message "Deploy ${{ github.sha }}"
+      • En PRs (Preview opcional): netlify deploy --dir=dist --alias "pr-${{ github.event.number }}" → genera una URL fija para ese PR (https://pr-33--tusitio.netlify.app).
+      • Pro: herramienta oficial mantenida por Netlify, cero riesgo de que una Action de comunidad quede abandonada, replicable idéntico en tu terminal.
+  2. Action comunitaria (nwtgck/actions-netlify / jsmrcaga/action-netlify-deploy):
+      • Pro: YAML más declarativo y comenta automáticamente la URL de Preview en el PR.
+      • Contra: acoplás tu pipeline a un tercero (sus actualizaciones de Node/CLI pueden atrasarse respecto a GitHub Runners).
+
+
+  (Cierre obligatorio en el panel de Netlify: en Build & deploy → Stop builds desactivás el build automático de Netlify para que no compile por duplicado cuando mergeás a main.)
+  ──────
+  Átomo 6 — Hardening mínimo de seguridad (lo que casi todos olvidan)
+
+  • permissions: contents: read arriba del workflow (principio de menor privilegio: el runner solo lee el repo, no tiene permiso para escribir commits ni tags; si comentás PRs, agregás pull-requests: write solo en
+  ese job).
+  • Versionado de Actions: usar versiones mayores fijadas (actions/checkout@v4, actions/setup-node@v4, etc.) y, en entornos muy estrictos, pinnear por SHA del commit.
+  • Branch Protection en GitHub (main): exigir que los checks (lint, test, build) pasen antes del merge y bloquear pushes directos si querés disciplina de equipo.
+  ──────
+  Átomo 7 — Dónde entra Cypress en este mapa (evolución progresiva)
+
+  No todo tiene que entrar el día 1:
+
+  • Hoy: lint + vitest + build → deploy.
+  • Cuando sanees los specs core (01..10): sumás un job e2e en paralelo con build (usando cypress-io/github-action y VITE_ENABLE_TWO_COLUMN_MODE=true si testeás 2 columnas) y recién cuando sea 100% determinista lo
+  agregás a needs: del job deploy.
+  ──────
+  Con todo este mapa sobre la mesa para tu primer workflow real en este proyecto: ¿querés arrancar con la arquitectura multi-job con Environment de producción (usando netlify-cli), y preferís hacer deploy solo a
+  producción en main o incluir también Deploy Previews por PR?

@@ -40,4 +40,75 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run lint
-  
+  build:
+    name: Build Production Bundle
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_ENABLE_TWO_COLUMN_MODE: ${{ vars.VITE_ENABLE_TWO_COLUMN_MODE }}
+          VITE_ENABLE_BITACORA: ${{ vars.VITE_ENABLE_BITACORA }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-bundle
+          path: dist/
+          retention-days: 3
+
+  deploy_preview:
+    name: Deploy Preview (PR)
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.netlify.outputs.deploy_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-bundle
+          path: dist/
+      - name: Deploy preview to Netlify
+        id: netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          DEPLOY_JSON=$(npx --yes netlify-cli@27 deploy --dir=dist --alias="pr-${{ github.event.pull_request.number }}" --json)
+          echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.deploy_url')" >> "$GITHUB_OUTPUT"
+
+  deploy_production:
+    name: Deploy Production (main)
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.netlify.outputs.deploy_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-bundle
+          path: dist/
+      - name: Deploy production to Netlify
+        id: netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          DEPLOY_JSON=$(npx --yes netlify-cli@27 deploy --dir=dist --prod --message="Deploy ${{ github.sha }}" --json)
+          echo "deploy_url=$(echo "$DEPLOY_JSON" | jq -r '.url // .deploy_url')" >> "$GITHUB_OUTPUT"

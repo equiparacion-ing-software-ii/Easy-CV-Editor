@@ -179,6 +179,20 @@ const EditableBaseSection = ({ section, hideDragAffordance = false }) => {
     return <CustomSection section={section} isPrint={false} />;
   }
 
+  return (
+    <StandardEditableBaseSection
+      section={section}
+      hideDragAffordance={hideDragAffordance}
+      descriptor={descriptor}
+    />
+  );
+};
+
+/**
+ * StandardEditableBaseSection
+ * Renders standard interactive CV section with hooks called unconditionally.
+ */
+const StandardEditableBaseSection = ({ section, hideDragAffordance = false, descriptor }) => {
   const isMoveDisabled = Boolean(
     descriptor?.isMoveDisabled ||
     descriptor?.allowSectionDrag === false ||

@@ -15,25 +15,66 @@ La arquitectura permite manipular el orden de las secciones y el contenido de fo
 
 ## Requisitos del Sistema
 
-*   Node.js (v18.0.0 o superior)
-*   NPM (v8.0.0 o superior)
-*   Netlify CLI (Recomendado para pruebas locales del backend)
+*   Node.js v22 o superior y npm.
 
-## Instalación y Despliegue Local
+## Cómo Correrlo en Local para Desarrollo
 
-1. Clonar el repositorio.
-2. Instalar las dependencias del frontend:
-   ```bash
-   npm install
+### Opción A: Con Docker (Recomendado)
+ 
+1. Crear `.env` a partir de la plantilla de variables de entorno:
+   ```bashe.env.example
+   cp .env.example .env
    ```
-3. Iniciar el servidor de desarrollo Vite:
+2. Construir la imagen y levantar el servidor de desarrollo Vite (`http://localhost:5173`):
+   ```bash por defecto en 
+   docker compose up -d --build
+   ```
+3. Ver
+| T| :--- | :--- |
+Cheasheet de c
+Linter (ESLint) | `docker compose exec app npm run lint` |
+| Tests unitarios (Vitest) | `docker compose exec app npm test` |
+| Tests en modo watch | `docker compose exec app npm run test:watch` |
+| Tests E2E en Chrome (Cypress) | `docker compose run --rm cypress` |
+| Un spec E2E puntual | `docker compose run --rm cypress --browser chrome --spec cypress/e2e/<archivo>.cy.js` |
+> [!NOTE]
+> Antes de ejecutar pruebas E2E por primera vez, construir la imagen de Cypress con `docker compose --profile test build cypress`.
+
+#### Actualización de dependencias (`package.json` / `package-lock.json`)
+El contenedor aísla `/app/node_modules` en un volumen anónimo para evitar conflictos entre el sistema host y Linux.1. Copiar `.env
+.example` a `.env` e instalar dependencias respetando `package-lock.json`:
+
+   cp .env.example .env
+   npm ci
+   ```
+2. Iniciar el servidor de desarrollo (`http://localhost:5173`):
    ```bash
    npm run dev
    ```
-4. Para probar la función de PDF localmente, se requiere instalar Netlify CLI de forma global (`npm install -g netlify-cli`) y ejecutar:
-   ```bash
-   netlify dev
-   ```
+
+## Cómo Crear la Build
+
+La aplicación se compila como una SPA estática dentro de la carpeta `dist/`.
+
+> [!IMPORTANT]
+> Vite incrusta las variables `VITE_*` (como los feature flags de `.env.example` o credenciales públicas de Supabase) **en tiempo de compilación**. Asegurarse de definirlas antes de ejecutar el build.
+
+### Build local y verificación
+
+* **Con Docker** (compila una imagen actualizada y valida lint, tests unitarios y build en un contenedor limpio):
+  ```bash
+  docker compose build app
+  docker compose run --rm --no-deps app sh -c "npm run lint && npm test && npm run build"
+  ```
+* **Con Node.js local:**
+  ```bash
+  npm run build
+  npm run preview
+  ```
+
+### Build y despliegue automatizado (CI/CD + Netlify)
+
+El flujo definido en `.github/workflows/ci-cd.yml` ejecuta `npm run lint` y `npm test` en paralelo, compila `dist/` una única vez con `npm run build` y publica ese artefacto verificado en Netlify mediante `netlify-cli` (`deploy_preview` en Pull Requests hacia `main` y `deploy_production` al integrar en `main`, utilizando la configuración de `netlify.toml`).
 
 ## Documentación
 

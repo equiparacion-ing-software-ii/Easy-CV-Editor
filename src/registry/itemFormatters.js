@@ -51,7 +51,7 @@ export const baseItemMarkdown = (item) => {
 
   const description = stripHtml(item.description || '')
     .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-    .replace(/[☑☐✓✔🗹]/g, '')
+    .replace(/[☑☐✓✔🗹]/gu, '')
     .trim();
   if (description) lines.push(description);
 
@@ -59,7 +59,7 @@ export const baseItemMarkdown = (item) => {
     item.bullets.forEach(b => {
       const cleanB = stripHtml(b)
         .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-        .replace(/[☑☐✓✔🗹]/g, '')
+        .replace(/[☑☐✓✔🗹]/gu, '')
         .trim();
       if (cleanB) lines.push(`- ${cleanB}`);
     });
@@ -225,7 +225,7 @@ export const mentoringMarkdown = (item) => {
 
   const description = stripHtml(item.description || '')
     .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-    .replace(/[☑☐✓✔🗹]/g, '')
+    .replace(/[☑☐✓✔🗹]/gu, '')
     .trim();
   if (description) lines.push(description);
 
@@ -233,7 +233,7 @@ export const mentoringMarkdown = (item) => {
     item.bullets.forEach(b => {
       const cleanB = stripHtml(b)
         .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-        .replace(/[☑☐✓✔🗹]/g, '')
+        .replace(/[☑☐✓✔🗹]/gu, '')
         .trim();
       if (cleanB) lines.push(`- ${cleanB}`);
     });
@@ -309,7 +309,7 @@ export const baseItemPlainText = (item) => {
   if (item.description) {
     const cleanDesc = stripHtml(item.description)
       .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-      .replace(/[☑☐✓✔🗹]/g, '')
+      .replace(/[☑☐✓✔🗹]/gu, '')
       .trim();
     if (cleanDesc) lines.push(cleanDesc);
   }
@@ -317,7 +317,7 @@ export const baseItemPlainText = (item) => {
     item.bullets.forEach(b => {
       const clean = stripHtml(b)
         .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
-        .replace(/[☑☐✓✔🗹]/g, '')
+        .replace(/[☑☐✓✔🗹]/gu, '')
         .trim();
       if (clean) lines.push(`* ${clean}`);
     });

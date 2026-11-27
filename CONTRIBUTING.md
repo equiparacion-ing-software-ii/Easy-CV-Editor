@@ -136,21 +136,86 @@ npm test
 
 ## 4. Guía de Ejecución de Pruebas y Validación de Calidad
 
-### Pruebas Automatizadas
+### Validación Local (Docker recomendado o Node.js v22+)
 ```bash
-# Ejecutar todas las pruebas una vez
+# Con Docker (con el contenedor app corriendo)
+docker compose exec app npm run lint
+docker compose exec app npm test
+docker compose exec app npm run build
+
+# Con Node.js local
+npm run lint
 npm test
-
-# Modo observador (watch) para desarrollo
 npm run test:watch
+npm run build
 
-# Ejecutar una suite específica
+# Ejecutar una suite específica de Vitest
 npx vitest run src/tests/registry.test.jsx
 ```
 
 ### Criterio de Aceptación para Pull Requests (PR)
-1. **100% de tests en verde**: Los 1,015 tests deben pasar sin excepciones.
-2. **Cero Números Mágicos**: Si usas dimensiones físicas A4, impórtalas de `src/constants/`.
-3. **Verificación Visual Empírica (Regla 6 de `AGENTS.md`)**:
+1. **Lint limpio**: `npm run lint` debe finalizar con `0 errors`.
+2. **100% de tests unitarios e integración en verde**: los 92 archivos (1,259 tests en Vitest) deben pasar sin excepciones.
+3. **Build de producción exitoso**: `npm run build` debe compilar `dist/` sin errores.
+4. **Cero Números Mágicos**: si usas dimensiones físicas A4, impórtalas de `src/constants/`.
+5. **Verificación Visual Empírica (Regla 6 de `AGENTS.md`)**:
    - JSDOM no evalúa fuentes subpíxel ni el motor `@media print`.
-   - Abre la aplicación en tu navegador (`npm run dev`), presiona **Descargar / Imprimir PDF**, y confirma visualmente que el documento tiene **exactamente el número de páginas esperado** sin viñetas fracturadas ni saltos inesperados.
+   - Si modificas layout, paginación o estilos de impresión, abre la aplicación en tu navegador (`http://localhost:5173`), presiona **Descargar / Imprimir PDF**, y confirma visualmente que el documento tiene **exactamente el número de páginas esperado** sin viñetas fracturadas ni saltos inesperados.
+
+---
+
+## 5. Flujo de Colaboración, Pull Requests y CI/CD
+
+No se realizan cambios directamente sobre `main`. Toda modificación entra mediante Pull Request (PR) validada por el pipeline de GitHub Actions en `.github/workflows/ci-cd.yml`.
+
+### Paso a paso para colaboradores
+
+1. **Crear una rama desde `main` actualizada** usando prefijos claros (`feat/...`, `fix/...`, `docs/...`) y commits convencionales.
+2. **Validar en local antes de subir cambios**: ejecutar `npm run lint`, `npm test` y `npm run build` (dentro de Docker o con Node local). Si agregaste o cambiaste dependencias, reconstruir el entorno con `docker compose up -d --build -V`.
+3. **Abrir un Pull Request hacia `main`**: al crearse o actualizarse el PR, GitHub Actions dispara automáticamente el flujo de integración continua.
+   - Si subes un commit nuevo al mismo PR mientras hay una corrida activa, la regla de concurrencia cancela la ejecución anterior para evitar colas innecesarias.
+4. **Revisar checks y Deploy Preview**: esperar a que `Lint (ESLint)`, `Unit & Integration Tests (Vitest suite)` y `Build Production Bundle` pasen en verde, y verificar el enlace de preview desplegado en Netlify (`Deploy Preview (PR)`).
+5. **Merge a `main` y despliegue a producción**: una vez aprobado y con todos los checks en verde, el merge hacia `main` ejecuta nuevamente el pipeline sin cancelarse por concurrencia y publica el artefacto verificado en producción (`Deploy Production (main)`).
+
+### Flujo de Pull Request
+
+```mermaid
+flowchart LR
+  dev["Rama feature o fix desde main"] --> local["Validación local: lint, test y build"]
+  local --> pr["Abrir Pull Request hacia main"]
+  pr --> ci["CI en GitHub Actions: lint, test y build"]
+  ci -->|Falla algún job| fix["Corregir en la rama y hacer push"]
+  fix --> ci
+  ci -->|Checks en verde| preview["Deploy Preview en Netlify"]
+  preview -->|Verificación visual OK y aprobación| merge["Merge a main"]
+  merge --> prod["CD en main: re-valida y publica a producción"]
+```
+
+### Workflow de CI-CD `.github/workflows/ci-cd.yml`
+
+Un mismo workflow orquesta ambas fases de forma secuencial en el tiempo: primero valida y publica el **Preview del PR**, y recién tras verificarlo y hacer **merge a `main`**, el evento `push` dispara el despliegue a **Producción**.
+
+```mermaid
+flowchart TD
+  subgraph phase_pr ["Fase 1: Pull Request hacia main (CI y Preview)"]
+    evPR["Trigger: pull_request a main"] --> concPR["Concurrencia: cancela corridas previas del mismo PR"]
+    concPR --> lintPR["Job lint: Lint (ESLint)"]
+    concPR --> testPR["Job test: Unit & Integration Tests (Vitest suite)"]
+    lintPR -->|needs| buildPR["Job build: environment preview (artefacto dist-bundle)"]
+    testPR -->|needs| buildPR
+    buildPR -->|needs + pull_request| preview["Job deploy_preview: Deploy Preview en Netlify (deploy_production: Skipped)"]
+  end
+
+  preview --> gate["Verificación humana del Preview, aprobación y Merge a main"]
+
+  subgraph phase_main ["Fase 2: Post-Merge a main (CD a Producción)"]
+    evPush["Trigger: push a main"] --> concMain["Concurrencia: nunca cancela deploy en main"]
+    concMain --> lintMain["Job lint: Lint (ESLint)"]
+    concMain --> testMain["Job test: Unit & Integration Tests (Vitest suite)"]
+    lintMain -->|needs| buildMain["Job build: environment production (artefacto dist-bundle)"]
+    testMain -->|needs| buildMain
+    buildMain -->|needs + push a main| prod["Job deploy_production: Deploy Production en Netlify (deploy_preview: Skipped)"]
+  end
+
+  gate --> evPush
+```

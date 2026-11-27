@@ -1,0 +1,16 @@
+#No empaquetar las depenciencias locales
+node_modules/
+dist/
+#No incluir los logs
+**.log*
+#No incluir artefactos creados por los tests
+tests/adversarial-output/
+
+.gitignore
+.git/
+.env
+.env.test
+!.env.example
+
+
+.vscode

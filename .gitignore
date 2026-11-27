@@ -5,6 +5,7 @@ dist/
 cypress/videos/
 cypress/screenshots/
 cypress/downloads/
+cypress/fixtures/
 # Artefactos de contexto realizado por agentes
 *.md
 *.MD
@@ -16,6 +17,8 @@ public/__*
 test_headless.pdf
 .agents/
 .atl/
+tests/adversarial-output/*.pdf
 # Archivos que deben permanecer sin importar las reglas anteriores
 !README.md
 !CONTRIBUTING.md
+!docs/TRABAJO_PRACTICO_DOCKER_CICD.md

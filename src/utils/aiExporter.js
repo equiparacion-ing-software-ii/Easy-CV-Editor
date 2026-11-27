@@ -71,7 +71,7 @@ export const sanitizeATSText = (str) => {
     // Strip dollar signs wrapping technical terms: $N+1$ -> N+1, $CI/CD$ -> CI/CD
     .replace(/\$([a-zA-Z0-9_\-+/]+)\$/g, '$1')
     // Strip non-standard checkboxes and symbols that disrupt ATS OCR and text-layer extraction
-    .replace(/[☑☐✓✔🗹]/g, '')
+    .replace(/[☑☐✓✔🗹]/gu, '')
     // Clean up residual multiple spaces
     .replace(/[ \t]{2,}/g, ' ')
     .trim();

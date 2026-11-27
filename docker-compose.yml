@@ -1,0 +1,31 @@
+services:
+  app:
+      build:
+        context: .
+        target: dev
+      ports:
+        - "5173:5173"
+      volumes:
+        - .:/app # Monta el códigio para habilitar hot-reload cuando hagan cambios directamente en disco mientras se desarrolla
+        - /app/node_modules
+      healthcheck:
+        test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+        interval: 3s
+        timeout: 3s
+        retries: 15
+        start_period: 5s
+  cypress:
+        build:
+          context: .
+          target: cypress
+        profiles:
+          - test
+        network_mode: "service:app"
+        depends_on:
+          app:
+            condition: service_healthy
+        shm_size: "512mb"
+        volumes:
+          - .:/app
+          - /app/node_modules
+        command: ["--browser", "chrome"]
